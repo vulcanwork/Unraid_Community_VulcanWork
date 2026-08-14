@@ -1,0 +1,13 @@
+<CommunityApplications>
+  <Profile>
+    Describe what users will find in this repository, which apps or plugins you maintain, and where they should go for support.
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME/main/icon.svg</Icon>
+  <WebPage>https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME</WebPage>
+  <!-- Optional support links -->
+  <!-- <Forum>https://forums.unraid.net/topic/YOUR_SUPPORT_TOPIC</Forum> -->
+  <!-- <Discord>https://discord.gg/YOUR_INVITE_CODE</Discord> -->
+  <!-- Optional profile extras -->
+  <!-- <DonateLink>https://github.com/sponsors/YOUR_GITHUB_USERNAME</DonateLink> -->
+  <!-- <DonateText>Support this project</DonateText> -->
+</CommunityApplications>
