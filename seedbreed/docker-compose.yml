@@ -1,0 +1,18 @@
+services:
+  seedbreed:
+    build: .
+    image: seedbreed:local
+    container_name: seedbreed
+    restart: unless-stopped
+    ports:
+      # Host port -> container port 80.
+      - "${SEEDBREED_PORT:-8080}:80"
+    volumes:
+      - ./data:/data        # SQLite database lives here (survives rebuilds)
+      - ./photos:/photos    # uploaded photos live here
+    environment:
+      # Login credential for making changes. Browsing stays open to everyone;
+      # editing requires this user/password. CHANGE THESE before exposing the
+      # site — set them here or in a .env file beside this compose file.
+      SEEDBREED_AUTH_USERNAME: ${SEEDBREED_AUTH_USERNAME:-admin}
+      SEEDBREED_AUTH_PASSWORD: ${SEEDBREED_AUTH_PASSWORD:-changeme}

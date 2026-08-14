@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>SeedBreed</Name>
+  <Repository>ghcr.io/vulcanwork/seedbreed:latest</Repository>
+  <Registry>https://ghcr.io/vulcanwork/seedbreed</Registry>
+  <Branch/>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>8080</HostPort>
+        <ContainerPort>80</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/vulcanwork/Unraid_Community_VulcanWork/issues</Support>
+  <Project>https://github.com/vulcanwork/Unraid_Community_VulcanWork</Project>
+  <Overview>A self-hosted grow journal and genetics tracker. Log check-ins with photos, compare side-by-side groups (natural vs. chemical fertilizer, indoor vs. outdoor, whatever axis you want), and trace every seed backward to its parents and forward to whatever it produces. Browsing is open to everyone on your network; making changes requires the login you set below. Data (SQLite) and uploaded photos are stored on two host paths so they survive container updates.</Overview>
+  <Category>Tools:</Category>
+  <WebUI>http://[IP]:[PORT:80]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/vulcanwork/Unraid_Community_VulcanWork/main/templates/seedbreed.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/vulcanwork/Unraid_Community_VulcanWork/main/icons/seedbreed.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="80" Default="8080" Mode="tcp" Description="Port the SeedBreed web UI is served on" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/seedbreed/data" Mode="rw" Description="SQLite database — keep this on your array/cache so it survives updates" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/seedbreed/data</Config>
+  <Config Name="Photos" Target="/photos" Default="/mnt/user/appdata/seedbreed/photos" Mode="rw" Description="Uploaded check-in and plant photos" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/seedbreed/photos</Config>
+  <Config Name="Auth Username" Target="SEEDBREED_AUTH_USERNAME" Default="admin" Mode="" Description="Username required to make changes. Browsing is open to everyone; this only gates writes." Type="Variable" Display="always" Required="true" Mask="false">admin</Config>
+  <Config Name="Auth Password" Target="SEEDBREED_AUTH_PASSWORD" Default="" Mode="" Description="Password required to make changes. Set a strong one before exposing this outside your LAN." Type="Variable" Display="always" Required="true" Mask="true"></Config>
+</Container>
