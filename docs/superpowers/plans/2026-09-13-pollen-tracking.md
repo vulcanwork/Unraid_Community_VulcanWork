@@ -401,7 +401,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **Files:**
 - Modify: `seedbreed/backend/app/models.py` (add `PollenCollection` before `SeedProductionEvent`; add FK column + relationship to `SeedProductionEvent`)
 - Modify: `seedbreed/backend/app/schemas.py` (add `Pollen*` schemas before `# ---------- Seed Production ----------`)
-- Modify: `seedbreed/backend/app/main.py` (add `# ============ Pollen ============` section before `# ============ Seed production ============`)
+- Modify: `seedbreed/backend/app/main.py` (add `# ============ Pollen ============` section before `# ============ Seed Production (the breeding piece) ============`)
 - Create: `seedbreed/backend/tests/test_pollen.py`
 
 **Interfaces:**
@@ -576,7 +576,7 @@ class PollenOut(ORMBase):
 
 - [ ] **Step 5: Add the routes**
 
-In `seedbreed/backend/app/main.py`, immediately before the line `# ============ Seed production ============` (search for it; it precedes `_sp_to_out`), add:
+In `seedbreed/backend/app/main.py`, immediately before the line `# ============ Seed Production (the breeding piece) ============` (line ~669; it precedes `_sp_to_out`), add:
 ```python
 # ============ Pollen ============
 
