@@ -345,7 +345,8 @@ class PollenOut(ORMBase):
 class SeedProductionCreate(BaseModel):
     date: Optional[date_type] = None
     parent_a_plant_id: int
-    parent_b_plant_id: Optional[int] = None
+    # Parent B (pollen donor) is derived server-side from this pollen record.
+    pollen_collection_id: Optional[int] = None
     event_type: SeedProductionType
     seed_count: Optional[int] = None
     new_strain_name: Optional[str] = None
@@ -357,10 +358,12 @@ class SeedProductionUpdate(BaseModel):
 
     Edits the event record itself; does not retroactively create/alter the
     strain or seed batch that the original event may have spawned.
+    Sending pollen_collection_id re-derives parent B (null clears it);
+    omitting it leaves parent B untouched.
     """
     date: Optional[date_type] = None
     parent_a_plant_id: Optional[int] = None
-    parent_b_plant_id: Optional[int] = None
+    pollen_collection_id: Optional[int] = None
     event_type: Optional[SeedProductionType] = None
     seed_count: Optional[int] = None
     new_strain_name: Optional[str] = None
@@ -372,6 +375,7 @@ class SeedProductionOut(ORMBase):
     date: date
     parent_a_plant_id: int
     parent_b_plant_id: Optional[int]
+    pollen_collection_id: Optional[int]
     event_type: SeedProductionType
     seed_count: Optional[int]
     new_strain_name: Optional[str]
@@ -379,6 +383,7 @@ class SeedProductionOut(ORMBase):
     created_at: datetime
     parent_a_label: Optional[str] = None
     parent_b_label: Optional[str] = None
+    pollen_label: Optional[str] = None
 
 
 # ---------- Lineage ----------

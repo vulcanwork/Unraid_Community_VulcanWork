@@ -751,11 +751,24 @@ def delete_pollen(pollen_id: int, db: Session = Depends(get_db)):
 
 # ============ Seed Production (the breeding piece) ============
 
+def _pollen_label(p: models.PollenCollection) -> str:
+    label = p.source_plant.label if p.source_plant else f"Plant #{p.source_plant_id}"
+    return f"{label} · {p.collected_date.isoformat()}"
+
+
 def _sp_to_out(e: models.SeedProductionEvent) -> schemas.SeedProductionOut:
     data = schemas.SeedProductionOut.model_validate(e).model_dump()
     data["parent_a_label"] = e.parent_a.label if e.parent_a else None
     data["parent_b_label"] = e.parent_b.label if e.parent_b else None
+    data["pollen_label"] = _pollen_label(e.pollen_collection) if e.pollen_collection else None
     return schemas.SeedProductionOut(**data)
+
+
+def _get_pollen_or_400(db: Session, pollen_id: int) -> models.PollenCollection:
+    p = db.get(models.PollenCollection, pollen_id)
+    if not p:
+        raise HTTPException(400, "pollen_collection_id not found")
+    return p
 
 
 @app.get("/api/seed-production", response_model=List[schemas.SeedProductionOut])
@@ -768,19 +781,21 @@ def list_seed_production(db: Session = Depends(get_db)):
 def create_seed_production(payload: schemas.SeedProductionCreate, db: Session = Depends(get_db)):
     """Log a seed-production event.
 
-    Side effects: create a new Strain (if new_strain_name given and not existing),
-    then create a Seed batch linked to that strain with origin='produced' and the
-    parent event recorded — closing the lineage loop.
+    Parent B (the pollen donor) is derived from the pollen collection, never
+    set directly. Side effects: create a new Strain (if new_strain_name given
+    and not existing), then create a Seed batch linked to that strain with
+    origin='produced' and the parent event recorded — closing the lineage loop.
     """
     pa = db.get(models.Plant, payload.parent_a_plant_id)
     if not pa:
         raise HTTPException(400, "parent_a_plant_id not found")
-    if payload.parent_b_plant_id is not None and not db.get(models.Plant, payload.parent_b_plant_id):
-        raise HTTPException(400, "parent_b_plant_id not found")
+    pollen = _get_pollen_or_400(db, payload.pollen_collection_id) if payload.pollen_collection_id else None
+    pb = pollen.source_plant if pollen else None
 
     data = payload.model_dump()
     if data.get("date") is None:
         data["date"] = date.today()
+    data["parent_b_plant_id"] = pb.id if pb else None
     event = models.SeedProductionEvent(**data)
     db.add(event)
     db.flush()
@@ -790,9 +805,8 @@ def create_seed_production(payload: schemas.SeedProductionCreate, db: Session = 
     if payload.new_strain_name:
         strain = db.query(models.Strain).filter_by(name=payload.new_strain_name).first()
         if not strain:
-            pa_strain = pa.seed.strain if (pa.seed and pa.seed.strain) else None
-            pb = db.get(models.Plant, payload.parent_b_plant_id) if payload.parent_b_plant_id else None
-            pb_strain = pb.seed.strain if (pb and pb.seed and pb.seed.strain) else None
+            pa_strain = pa.strain or (pa.seed.strain if (pa.seed and pa.seed.strain) else None)
+            pb_strain = (pb.strain or (pb.seed.strain if (pb.seed and pb.seed.strain) else None)) if pb else None
             strain = models.Strain(
                 name=payload.new_strain_name,
                 parent_a_id=pa_strain.id if pa_strain else None,
@@ -824,7 +838,8 @@ def update_seed_production(event_id: int, payload: schemas.SeedProductionUpdate,
     """Edit an existing seed-production event. Only the fields you send change.
 
     This edits the event record itself only — it doesn't retroactively create or
-    rename the strain/seed batch the original event may have spawned.
+    rename the strain/seed batch the original event may have spawned. Sending
+    pollen_collection_id re-derives parent B; sending null clears both.
     """
     event = db.get(models.SeedProductionEvent, event_id)
     if not event:
@@ -832,8 +847,12 @@ def update_seed_production(event_id: int, payload: schemas.SeedProductionUpdate,
     updates = payload.model_dump(exclude_unset=True)
     if "parent_a_plant_id" in updates and not db.get(models.Plant, updates["parent_a_plant_id"]):
         raise HTTPException(400, "parent_a_plant_id not found")
-    if updates.get("parent_b_plant_id") is not None and not db.get(models.Plant, updates["parent_b_plant_id"]):
-        raise HTTPException(400, "parent_b_plant_id not found")
+    if "pollen_collection_id" in updates:
+        if updates["pollen_collection_id"] is None:
+            updates["parent_b_plant_id"] = None
+        else:
+            pollen = _get_pollen_or_400(db, updates["pollen_collection_id"])
+            updates["parent_b_plant_id"] = pollen.source_plant_id
     for field, value in updates.items():
         setattr(event, field, value)
     db.commit()
