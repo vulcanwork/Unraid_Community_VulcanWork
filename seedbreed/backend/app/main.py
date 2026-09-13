@@ -318,13 +318,17 @@ def add_group(grow_id: int, payload: schemas.GroupCreate, db: Session = Depends(
 MAX_PLANTS_PER_GROUP = 4
 
 
-def _plant_to_out(plant: models.Plant) -> schemas.PlantOut:
-    data = schemas.PlantOut.model_validate(plant).model_dump()
-    # Prefer a directly-linked strain; fall back to the seed's strain.
+def _plant_strain_name(plant: models.Plant) -> Optional[str]:
     strain = plant.strain
     if strain is None and plant.seed and plant.seed.strain:
         strain = plant.seed.strain
-    data["strain_name"] = strain.name if strain else None
+    return strain.name if strain else None
+
+
+def _plant_to_out(plant: models.Plant) -> schemas.PlantOut:
+    data = schemas.PlantOut.model_validate(plant).model_dump()
+    # Prefer a directly-linked strain; fall back to the seed's strain.
+    data["strain_name"] = _plant_strain_name(plant)
     data["group_name"] = plant.group.name if plant.group else None
     return schemas.PlantOut(**data)
 
@@ -664,6 +668,82 @@ def create_harvest(payload: schemas.HarvestCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(h)
     return h
+
+
+# ============ Pollen ============
+
+POLLEN_SOURCE_SEXES = {models.PlantSex.male, models.PlantSex.hermaphrodite}
+
+
+def _pollen_to_out(p: models.PollenCollection) -> schemas.PollenOut:
+    data = schemas.PollenOut.model_validate(p).model_dump()
+    data["source_plant_label"] = p.source_plant.label if p.source_plant else None
+    data["source_plant_strain_name"] = _plant_strain_name(p.source_plant) if p.source_plant else None
+    return schemas.PollenOut(**data)
+
+
+def _assert_pollen_source(db: Session, plant_id: int) -> models.Plant:
+    """Pollen can only come from a plant we've marked male or hermaphrodite."""
+    plant = db.get(models.Plant, plant_id)
+    if not plant:
+        raise HTTPException(400, "source_plant_id not found")
+    if plant.sex not in POLLEN_SOURCE_SEXES:
+        raise HTTPException(
+            400, "Pollen can only be collected from a plant marked male or hermaphrodite."
+        )
+    return plant
+
+
+@app.get("/api/pollen", response_model=List[schemas.PollenOut])
+def list_pollen(db: Session = Depends(get_db)):
+    return [_pollen_to_out(p) for p in db.query(models.PollenCollection).order_by(
+        models.PollenCollection.collected_date.desc(), models.PollenCollection.id.desc()).all()]
+
+
+@app.post("/api/pollen", response_model=schemas.PollenOut)
+def create_pollen(payload: schemas.PollenCreate, db: Session = Depends(get_db)):
+    _assert_pollen_source(db, payload.source_plant_id)
+    data = payload.model_dump()
+    if data.get("collected_date") is None:
+        data["collected_date"] = date.today()
+    p = models.PollenCollection(**data)
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return _pollen_to_out(p)
+
+
+@app.patch("/api/pollen/{pollen_id}", response_model=schemas.PollenOut)
+def update_pollen(pollen_id: int, payload: schemas.PollenUpdate, db: Session = Depends(get_db)):
+    """Edit a pollen collection. Only the fields you send are changed."""
+    p = db.get(models.PollenCollection, pollen_id)
+    if not p:
+        raise HTTPException(404, "Pollen collection not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if updates.get("source_plant_id") is not None:
+        _assert_pollen_source(db, updates["source_plant_id"])
+    for field, value in updates.items():
+        setattr(p, field, value)
+    db.commit()
+    db.refresh(p)
+    return _pollen_to_out(p)
+
+
+@app.delete("/api/pollen/{pollen_id}")
+def delete_pollen(pollen_id: int, db: Session = Depends(get_db)):
+    p = db.get(models.PollenCollection, pollen_id)
+    if not p:
+        raise HTTPException(404, "Pollen collection not found")
+    referenced = db.query(models.SeedProductionEvent).filter_by(pollen_collection_id=pollen_id).first()
+    if referenced:
+        raise HTTPException(
+            400,
+            "Can't delete this pollen record: a seed-production event uses it. "
+            "Edit that breeding record first.",
+        )
+    db.delete(p)
+    db.commit()
+    return {"ok": True, "id": pollen_id}
 
 
 # ============ Seed Production (the breeding piece) ============

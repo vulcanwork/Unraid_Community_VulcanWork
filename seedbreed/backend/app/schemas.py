@@ -309,6 +309,37 @@ class HarvestOut(ORMBase):
     created_at: datetime
 
 
+# ---------- Pollen ----------
+
+class PollenCreate(BaseModel):
+    source_plant_id: int
+    collected_date: Optional[date] = None
+    amount: Optional[str] = None
+    storage: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class PollenUpdate(BaseModel):
+    """Partial update — only provided fields are changed."""
+    source_plant_id: Optional[int] = None
+    collected_date: Optional[date] = None
+    amount: Optional[str] = None
+    storage: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class PollenOut(ORMBase):
+    id: int
+    source_plant_id: int
+    collected_date: date
+    amount: Optional[str]
+    storage: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+    source_plant_label: Optional[str] = None
+    source_plant_strain_name: Optional[str] = None
+
+
 # ---------- Seed Production ----------
 
 class SeedProductionCreate(BaseModel):

@@ -245,11 +245,32 @@ class Harvest(Base):
     plant = relationship("Plant", back_populates="harvests")
 
 
+class PollenCollection(Base):
+    """Pollen collected from a male or hermaphrodite plant.
+
+    One row per collection. The same plant can appear many times — that's how
+    a stash "accumulates". Seed-production events reference the collection
+    that fathered them, which is how Parent B is derived.
+    """
+    __tablename__ = "pollen_collections"
+
+    id = Column(Integer, primary_key=True)
+    source_plant_id = Column(Integer, ForeignKey("plants.id"), nullable=False)
+    collected_date = Column(Date, nullable=False, default=date.today)
+    amount = Column(String, nullable=True)   # free-form: '~0.5 g', '2 vials'
+    storage = Column(String, nullable=True)  # 'freezer, vial #3'
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    source_plant = relationship("Plant")
+
+
 class SeedProductionEvent(Base):
     """Records seeds produced from one or two parent plants.
 
     parent_a_plant_id is the mother (seed bearer).
-    parent_b_plant_id is the father (pollen donor) — can be null for self/herm/unknown.
+    parent_b_plant_id is the father (pollen donor) — derived from pollen_collection_id
+    when present; null for self/herm/unknown; legacy rows may carry a manual value.
     A linked Seed record is created with origin='produced' and produced_by_event_id set,
     completing the bidirectional lineage.
     """
@@ -259,6 +280,10 @@ class SeedProductionEvent(Base):
     date = Column(Date, nullable=False, default=date.today)
     parent_a_plant_id = Column(Integer, ForeignKey("plants.id"), nullable=False)
     parent_b_plant_id = Column(Integer, ForeignKey("plants.id"), nullable=True)
+    # Which pollen collection fathered these seeds. When set, parent_b_plant_id
+    # is derived from it (pollen.source_plant_id). Null for self/herm/unknown
+    # events and for legacy rows logged before pollen tracking existed.
+    pollen_collection_id = Column(Integer, ForeignKey("pollen_collections.id"), nullable=True)
     event_type = Column(SqlEnum(SeedProductionType), nullable=False)
     seed_count = Column(Integer, nullable=True)
     new_strain_name = Column(String, nullable=True)  # if you're naming the cross
@@ -267,3 +292,4 @@ class SeedProductionEvent(Base):
 
     parent_a = relationship("Plant", foreign_keys=[parent_a_plant_id])
     parent_b = relationship("Plant", foreign_keys=[parent_b_plant_id])
+    pollen_collection = relationship("PollenCollection")
