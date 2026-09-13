@@ -16,15 +16,20 @@ alongside it under supervisord). Data lives in two host paths — `/data` and
 
 - **Grows** — a growing cycle. Each grow has one or more *groups* (the
   comparison axis).
-- **Plants** — individual plants linked to a seed, a grow, and a group.
+- **Plants** — individual plants linked to a seed, a grow, and a group, with a
+  sex (unknown / female / male / hermaphrodite).
 - **Check-ins** — dated observations with optional height, notes, and photos.
   Photos are auto-rotated and resized on upload so phone uploads stay sane.
 - **Fertilizer events** — every feeding logged with product, amount, stage.
 - **Harvests** — per-plant yield records (wet/dry weight, quality notes).
 - **Strains** — your library, with parent A / parent B links for lineage.
 - **Seeds** — every seed batch with an origin (purchased, gifted, produced).
+- **Pollen collections** — every time you collect pollen from a male or
+  hermaphrodite plant, log it (date, amount, where it's stored). The
+  Breeding page lists your pollen library.
 - **Seed production events** — log when a plant throws seeds (intentional
-  cross, accidental pollination, hermie). If you name the cross, it auto-
+  cross, accidental pollination, hermie). Pick the pollen collection you
+  used and the father is filled in from it. If you name the cross, it auto-
   creates a new strain with both parents linked and adds a seed batch with
   `origin=produced` pointing back to the event — closing the lineage loop.
 
@@ -130,6 +135,8 @@ Backend:
 ```bash
 cd backend
 pip install -r requirements.txt
+pip install -r requirements-dev.txt   # pytest + httpx
+python -m pytest                      # run the backend tests
 SEEDBREED_DATA_DIR=./data SEEDBREED_PHOTOS_DIR=./photos python -m app.seed_data
 SEEDBREED_DATA_DIR=./data SEEDBREED_PHOTOS_DIR=./photos uvicorn app.main:app --reload --port 8000
 ```
