@@ -1,0 +1,6 @@
+# Test-only deps. Runtime deps are in requirements.txt (pinned for the Docker
+# image). If your local Python is newer than the pins support, install the
+# runtime deps unpinned in your venv instead:
+#   pip install fastapi sqlalchemy pydantic python-multipart Pillow
+pytest
+httpx
