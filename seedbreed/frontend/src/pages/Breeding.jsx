@@ -35,7 +35,8 @@ export default function Breeding() {
   useEffect(() => { load(); }, []);
 
   const deletePollen = async (p) => {
-    if (!confirm(`Delete pollen from ${p.source_plant_label} (${p.collected_date})?`)) return;
+    const who = p.source_plant_label || `Plant #${p.source_plant_id}`;
+    if (!confirm(`Delete pollen from ${who} (${p.collected_date})?`)) return;
     try {
       await api.del(`/api/pollen/${p.id}`);
       load();
