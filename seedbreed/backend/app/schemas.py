@@ -4,7 +4,7 @@ from datetime import date as date_type  # use for fields literally named `date`
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
 
-from .models import SeedOrigin, FertilizerType, SeedProductionType
+from .models import SeedOrigin, FertilizerType, SeedProductionType, PlantSex
 
 
 class ORMBase(BaseModel):
@@ -166,6 +166,7 @@ class PlantCreate(BaseModel):
     grow_id: Optional[int] = None
     group_id: Optional[int] = None
     position: Optional[str] = None
+    sex: PlantSex = PlantSex.unknown
     germination_date: Optional[date] = None
     transplant_date: Optional[date] = None
     flip_date: Optional[date] = None
@@ -183,6 +184,7 @@ class PlantUpdate(BaseModel):
     grow_id: Optional[int] = None
     group_id: Optional[int] = None
     position: Optional[str] = None
+    sex: Optional[PlantSex] = None
     germination_date: Optional[date] = None
     transplant_date: Optional[date] = None
     flip_date: Optional[date] = None
@@ -200,6 +202,7 @@ class PlantOut(ORMBase):
     grow_id: Optional[int]
     group_id: Optional[int]
     position: Optional[str]
+    sex: PlantSex
     germination_date: Optional[date]
     transplant_date: Optional[date]
     flip_date: Optional[date]

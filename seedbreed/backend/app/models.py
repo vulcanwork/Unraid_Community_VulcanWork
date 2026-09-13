@@ -48,6 +48,13 @@ class SeedProductionType(str, enum.Enum):
     unknown = "unknown"
 
 
+class PlantSex(str, enum.Enum):
+    unknown = "unknown"
+    female = "female"
+    male = "male"
+    hermaphrodite = "hermaphrodite"
+
+
 # ---------- Core entities ----------
 
 class Strain(Base):
@@ -141,6 +148,7 @@ class Plant(Base):
     grow_id = Column(Integer, ForeignKey("grows.id"), nullable=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     position = Column(String, nullable=True)  # 'left', 'right', etc.
+    sex = Column(SqlEnum(PlantSex), nullable=False, default=PlantSex.unknown)
     germination_date = Column(Date, nullable=True)
     transplant_date = Column(Date, nullable=True)
     flip_date = Column(Date, nullable=True)  # when switched to flower
