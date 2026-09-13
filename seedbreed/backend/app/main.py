@@ -723,8 +723,12 @@ def update_pollen(pollen_id: int, payload: schemas.PollenUpdate, db: Session = D
     for required in ("source_plant_id", "collected_date"):
         if required in updates and updates[required] is None:
             raise HTTPException(400, f"{required} can't be null")
-    if "source_plant_id" in updates:
+    if "source_plant_id" in updates and updates["source_plant_id"] != p.source_plant_id:
         _assert_pollen_source(db, updates["source_plant_id"])
+        # Parent B on any cross that used this pollen is derived from the
+        # source plant, so keep those events in sync.
+        for ev in db.query(models.SeedProductionEvent).filter_by(pollen_collection_id=pollen_id).all():
+            ev.parent_b_plant_id = updates["source_plant_id"]
     for field, value in updates.items():
         setattr(p, field, value)
     db.commit()
@@ -790,7 +794,7 @@ def create_seed_production(payload: schemas.SeedProductionCreate, db: Session = 
     if not pa:
         raise HTTPException(400, "parent_a_plant_id not found")
     pollen = _get_pollen_or_400(db, payload.pollen_collection_id) if payload.pollen_collection_id else None
-    pb = pollen.source_plant if pollen else None
+    pb = pollen.source_plant if pollen else None  # Full Plant (not just the id): the strain fallback below needs pb.strain / pb.seed.
 
     data = payload.model_dump()
     if data.get("date") is None:

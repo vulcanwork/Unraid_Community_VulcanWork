@@ -84,3 +84,15 @@ def test_pollen_update_rejects_null_required_fields(client):
 def test_pollen_writes_require_login(anon_client, client):
     dad = make_plant(client, "Dad5", sex="male")
     assert anon_client.post("/api/pollen", json={"source_plant_id": dad["id"]}).status_code == 401
+
+
+def test_pollen_edit_allowed_after_source_plant_resexed(client):
+    """Re-sexing a plant later must not block editing its existing pollen history."""
+    dad = make_plant(client, "Dad7", sex="male")
+    created = client.post("/api/pollen", json={"source_plant_id": dad["id"]}).json()
+    client.patch(f"/api/plants/{dad['id']}", json={"sex": "female"})
+    r = client.patch(f"/api/pollen/{created['id']}", json={
+        "source_plant_id": dad["id"], "notes": "edited later",
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["notes"] == "edited later"

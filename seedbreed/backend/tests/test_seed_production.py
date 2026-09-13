@@ -113,6 +113,25 @@ def test_update_without_pollen_key_leaves_parent_b_alone(client):
     assert r.json()["pollen_collection_id"] == pollen["id"]
 
 
+def test_repointing_pollen_rederives_parent_b_on_events(client):
+    mom, dad, pollen = _cross_setup(client, "I")
+    ev = client.post("/api/seed-production", json={
+        "parent_a_plant_id": mom["id"],
+        "pollen_collection_id": pollen["id"],
+        "event_type": "intentional_cross",
+    }).json()
+    assert ev["parent_b_plant_id"] == dad["id"]
+
+    dad2 = make_plant(client, "Dad I2", sex="male")
+    r = client.patch(f"/api/pollen/{pollen['id']}", json={"source_plant_id": dad2["id"]})
+    assert r.status_code == 200, r.text
+
+    events = {e["id"]: e for e in client.get("/api/seed-production").json()}
+    assert events[ev["id"]]["parent_b_plant_id"] == dad2["id"]
+    assert events[ev["id"]]["parent_b_label"] == "Dad I2"
+    assert events[ev["id"]]["pollen_label"].startswith("Dad I2 · ")
+
+
 def test_pollen_referenced_by_event_cannot_be_deleted(client):
     mom, dad, pollen = _cross_setup(client, "H")
     client.post("/api/seed-production", json={
