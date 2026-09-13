@@ -4,6 +4,23 @@ import { api } from '../api.js';
 
 const MAX_PLANTS_PER_GROUP = 4;
 
+export const PLANT_SEX_OPTIONS = [
+  { value: 'unknown', label: 'Unknown' },
+  { value: 'female', label: 'Female' },
+  { value: 'male', label: 'Male' },
+  { value: 'hermaphrodite', label: 'Hermaphrodite' },
+];
+
+// Small ♀ / ♂ / ⚥ tag for a plant's sex; null when we don't know it yet.
+export function sexBadge(sex) {
+  switch (sex) {
+    case 'female': return { symbol: '♀', text: 'female' };
+    case 'male': return { symbol: '♂', text: 'male' };
+    case 'hermaphrodite': return { symbol: '⚥', text: 'herm' };
+    default: return null;
+  }
+}
+
 export default function GrowDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -214,6 +231,11 @@ function GroupPanel({ group, plants, onAddPlant, onEditPlant, onDeletePlant }) {
                 <div>
                   <strong>{p.label}</strong>
                   {p.strain_name && <span className="muted"> · {p.strain_name}</span>}
+                  {sexBadge(p.sex) && (
+                    <span className="badge" style={{ marginLeft: 8 }} title={`Sex: ${p.sex}`}>
+                      {sexBadge(p.sex).symbol} {sexBadge(p.sex).text}
+                    </span>
+                  )}
                 </div>
                 <div className="row-actions">
                   <button className="small-btn" onClick={() => onEditPlant(p)}>Edit</button>
@@ -485,11 +507,12 @@ function PlantModal({ grow, group, existing, strains, plantsInGroup, onClose, on
   const [form, setForm] = useState(() => existing ? {
     label: existing.label || '',
     strain_id: existing.strain_id ? String(existing.strain_id) : '',
+    sex: existing.sex || 'unknown',
     quantity_harvested: existing.quantity_harvested || '',
     comments: existing.comments || '',
     issues: existing.issues || '',
   } : {
-    label: '', strain_id: '', quantity_harvested: '', comments: '', issues: '',
+    label: '', strain_id: '', sex: 'unknown', quantity_harvested: '', comments: '', issues: '',
   });
   const [files, setFiles] = useState([]);
   const [photos, setPhotos] = useState(existing?.photos || []);
@@ -504,6 +527,7 @@ function PlantModal({ grow, group, existing, strains, plantsInGroup, onClose, on
       const payload = {
         label: form.label,
         strain_id: form.strain_id ? parseInt(form.strain_id) : null,
+        sex: form.sex,
         quantity_harvested: form.quantity_harvested || null,
         comments: form.comments || null,
         issues: form.issues || null,
@@ -557,11 +581,22 @@ function PlantModal({ grow, group, existing, strains, plantsInGroup, onClose, on
           </div>
         </div>
 
-        <div className="field">
-          <label>Quantity harvested</label>
-          <input value={form.quantity_harvested}
-                 onChange={(e) => setForm({ ...form, quantity_harvested: e.target.value })}
-                 placeholder="e.g. 3 oz, 85 g, 1 plant" />
+        <div className="grid grid-2">
+          <div className="field">
+            <label>Sex</label>
+            <select value={form.sex} onChange={(e) => setForm({ ...form, sex: e.target.value })}>
+              {PLANT_SEX_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <p className="small muted" style={{ margin: '6px 0 0' }}>
+              Mark males/herms so you can log pollen from them under Breeding.
+            </p>
+          </div>
+          <div className="field">
+            <label>Quantity harvested</label>
+            <input value={form.quantity_harvested}
+                   onChange={(e) => setForm({ ...form, quantity_harvested: e.target.value })}
+                   placeholder="e.g. 3 oz, 85 g, 1 plant" />
+          </div>
         </div>
         <div className="field">
           <label>Comments</label>

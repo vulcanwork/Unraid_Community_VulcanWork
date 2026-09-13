@@ -4,7 +4,7 @@ from datetime import date as date_type  # use for fields literally named `date`
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
 
-from .models import SeedOrigin, FertilizerType, SeedProductionType
+from .models import SeedOrigin, FertilizerType, SeedProductionType, PlantSex
 
 
 class ORMBase(BaseModel):
@@ -166,6 +166,7 @@ class PlantCreate(BaseModel):
     grow_id: Optional[int] = None
     group_id: Optional[int] = None
     position: Optional[str] = None
+    sex: PlantSex = PlantSex.unknown
     germination_date: Optional[date] = None
     transplant_date: Optional[date] = None
     flip_date: Optional[date] = None
@@ -183,6 +184,7 @@ class PlantUpdate(BaseModel):
     grow_id: Optional[int] = None
     group_id: Optional[int] = None
     position: Optional[str] = None
+    sex: Optional[PlantSex] = None
     germination_date: Optional[date] = None
     transplant_date: Optional[date] = None
     flip_date: Optional[date] = None
@@ -200,6 +202,7 @@ class PlantOut(ORMBase):
     grow_id: Optional[int]
     group_id: Optional[int]
     position: Optional[str]
+    sex: PlantSex
     germination_date: Optional[date]
     transplant_date: Optional[date]
     flip_date: Optional[date]
@@ -306,12 +309,44 @@ class HarvestOut(ORMBase):
     created_at: datetime
 
 
+# ---------- Pollen ----------
+
+class PollenCreate(BaseModel):
+    source_plant_id: int
+    collected_date: Optional[date] = None
+    amount: Optional[str] = None
+    storage: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class PollenUpdate(BaseModel):
+    """Partial update — only provided fields are changed."""
+    source_plant_id: Optional[int] = None
+    collected_date: Optional[date] = None
+    amount: Optional[str] = None
+    storage: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class PollenOut(ORMBase):
+    id: int
+    source_plant_id: int
+    collected_date: date
+    amount: Optional[str]
+    storage: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+    source_plant_label: Optional[str] = None
+    source_plant_strain_name: Optional[str] = None
+
+
 # ---------- Seed Production ----------
 
 class SeedProductionCreate(BaseModel):
     date: Optional[date_type] = None
     parent_a_plant_id: int
-    parent_b_plant_id: Optional[int] = None
+    # Parent B (pollen donor) is derived server-side from this pollen record.
+    pollen_collection_id: Optional[int] = None
     event_type: SeedProductionType
     seed_count: Optional[int] = None
     new_strain_name: Optional[str] = None
@@ -323,10 +358,12 @@ class SeedProductionUpdate(BaseModel):
 
     Edits the event record itself; does not retroactively create/alter the
     strain or seed batch that the original event may have spawned.
+    Sending pollen_collection_id re-derives parent B (null clears it);
+    omitting it leaves parent B untouched.
     """
     date: Optional[date_type] = None
     parent_a_plant_id: Optional[int] = None
-    parent_b_plant_id: Optional[int] = None
+    pollen_collection_id: Optional[int] = None
     event_type: Optional[SeedProductionType] = None
     seed_count: Optional[int] = None
     new_strain_name: Optional[str] = None
@@ -338,6 +375,7 @@ class SeedProductionOut(ORMBase):
     date: date
     parent_a_plant_id: int
     parent_b_plant_id: Optional[int]
+    pollen_collection_id: Optional[int]
     event_type: SeedProductionType
     seed_count: Optional[int]
     new_strain_name: Optional[str]
@@ -345,6 +383,7 @@ class SeedProductionOut(ORMBase):
     created_at: datetime
     parent_a_label: Optional[str] = None
     parent_b_label: Optional[str] = None
+    pollen_label: Optional[str] = None
 
 
 # ---------- Lineage ----------

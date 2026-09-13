@@ -25,7 +25,7 @@ def get_db():
         db.close()
 
 
-def run_lightweight_migrations():
+def run_lightweight_migrations(target_engine=None):
     """Add columns introduced after a DB was first created.
 
     SQLAlchemy's create_all() only creates missing tables, never alters existing
@@ -35,10 +35,13 @@ def run_lightweight_migrations():
 
     Must run after create_all() (so the tables exist) and before any ORM query
     touches the new columns — both entry points (seed_data and main) call it.
+
+    `target_engine` defaults to the app engine; tests pass their own.
     """
     from sqlalchemy import text
 
-    with engine.begin() as conn:
+    eng = target_engine or engine
+    with eng.begin() as conn:
         seed_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(seeds)"))}
         if "seeds_remaining" not in seed_cols:
             conn.execute(text("ALTER TABLE seeds ADD COLUMN seeds_remaining INTEGER"))
@@ -72,3 +75,13 @@ def run_lightweight_migrations():
             conn.execute(text("ALTER TABLE plants ADD COLUMN comments TEXT"))
         if "issues" not in plant_cols:
             conn.execute(text("ALTER TABLE plants ADD COLUMN issues TEXT"))
+        if "sex" not in plant_cols:
+            conn.execute(text(
+                "ALTER TABLE plants ADD COLUMN sex VARCHAR NOT NULL DEFAULT 'unknown'"
+            ))
+
+        sp_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(seed_production_events)"))}
+        if "pollen_collection_id" not in sp_cols:
+            conn.execute(text(
+                "ALTER TABLE seed_production_events ADD COLUMN pollen_collection_id INTEGER"
+            ))
