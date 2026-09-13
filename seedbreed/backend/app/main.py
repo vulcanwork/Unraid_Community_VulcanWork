@@ -720,7 +720,10 @@ def update_pollen(pollen_id: int, payload: schemas.PollenUpdate, db: Session = D
     if not p:
         raise HTTPException(404, "Pollen collection not found")
     updates = payload.model_dump(exclude_unset=True)
-    if updates.get("source_plant_id") is not None:
+    for required in ("source_plant_id", "collected_date"):
+        if required in updates and updates[required] is None:
+            raise HTTPException(400, f"{required} can't be null")
+    if "source_plant_id" in updates:
         _assert_pollen_source(db, updates["source_plant_id"])
     for field, value in updates.items():
         setattr(p, field, value)

@@ -72,6 +72,15 @@ def test_pollen_delete_unreferenced(client):
     assert created["id"] not in [p["id"] for p in client.get("/api/pollen").json()]
 
 
+def test_pollen_update_rejects_null_required_fields(client):
+    dad = make_plant(client, "Dad6", sex="male")
+    created = client.post("/api/pollen", json={"source_plant_id": dad["id"]}).json()
+    for field in ("source_plant_id", "collected_date"):
+        r = client.patch(f"/api/pollen/{created['id']}", json={field: None})
+        assert r.status_code == 400, r.text
+        assert "can't be null" in r.json()["detail"]
+
+
 def test_pollen_writes_require_login(anon_client, client):
     dad = make_plant(client, "Dad5", sex="male")
     assert anon_client.post("/api/pollen", json={"source_plant_id": dad["id"]}).status_code == 401
