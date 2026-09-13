@@ -369,7 +369,7 @@ function BreedingModal({ plants, pollen, existing, onClose, onSaved }) {
         </div>
         <p className="small muted" style={{ marginTop: -8 }}>
           {isEdit
-            ? 'Editing updates this event record only — it won't create or rename a strain/seed batch.'
+            ? 'Editing updates this event record only — it won’t create or rename a strain/seed batch.'
             : 'If you name the cross, it auto-creates a strain with both parents linked and adds a seed batch.'}
         </p>
 
