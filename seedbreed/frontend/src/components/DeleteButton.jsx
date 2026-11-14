@@ -14,12 +14,12 @@ export default function DeleteButton({ path, label, confirmText, onDeleted }) {
     setBusy(true);
     try {
       await api.del(path);
+      // Stay disabled on success: the row goes away once onDeleted reloads.
       onDeleted();
     } catch (e) {
+      setBusy(false);
       if (e.detail && e.detail.error === 'delete_blocked') setBlocked(e.detail);
       else alert(e.message);
-    } finally {
-      setBusy(false);
     }
   };
 
