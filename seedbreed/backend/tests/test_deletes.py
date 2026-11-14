@@ -287,3 +287,68 @@ def test_cross_cascade_with_no_blockers_succeeds(client):
     assert r.status_code == 200, r.text
     assert ev["id"] not in [e["id"] for e in client.get("/api/seed-production").json()]
     assert produced[0]["id"] not in [x["id"] for x in client.get("/api/seeds").json()]
+
+
+def test_plant_with_pollen_cannot_be_deleted(client):
+    dad = make_plant(client, "Pollen Donor Plant", sex="male")
+    po = client.post("/api/pollen", json={"source_plant_id": dad["id"]}).json()
+
+    r = client.delete(f"/api/plants/{dad['id']}")
+    assert r.status_code == 400, r.text
+    assert "pollen" in r.json()["detail"].lower()
+
+    assert client.delete(f"/api/pollen/{po['id']}").status_code == 200
+    assert client.delete(f"/api/plants/{dad['id']}").status_code == 200
+
+
+def test_grow_with_pollen_on_a_plant_cannot_be_deleted(client):
+    grow = client.post("/api/grows", json={
+        "name": "Pollen Guard Grow", "groups": [{"name": "G1"}],
+    }).json()
+    dad = make_plant(client, "In Grow Donor", sex="male",
+                     grow_id=grow["id"], group_id=grow["groups"][0]["id"])
+    po = client.post("/api/pollen", json={"source_plant_id": dad["id"]}).json()
+
+    r = client.delete(f"/api/grows/{grow['id']}")
+    assert r.status_code == 400, r.text
+    assert "pollen" in r.json()["detail"].lower()
+
+    assert client.delete(f"/api/pollen/{po['id']}").status_code == 200
+    assert client.delete(f"/api/grows/{grow['id']}").status_code == 200
+
+
+def test_plants_and_grows_without_pollen_still_delete(client):
+    """Review Focus 5 — the guard must not catch what works today."""
+    p = make_plant(client, "No Pollen Plant")
+    assert client.delete(f"/api/plants/{p['id']}").status_code == 200
+
+    grow = client.post("/api/grows", json={
+        "name": "No Pollen Grow", "groups": [{"name": "G1"}],
+    }).json()
+    make_plant(client, "Ordinary Plant", grow_id=grow["id"],
+               group_id=grow["groups"][0]["id"])
+    assert client.delete(f"/api/grows/{grow['id']}").status_code == 200
+
+
+def test_the_whole_chain_unwinds_in_order(client):
+    """cross -> pollen -> plant -> grow, each step blocked until the one before."""
+    grow = client.post("/api/grows", json={
+        "name": "Chain Grow", "groups": [{"name": "G1"}],
+    }).json()
+    gid = grow["groups"][0]["id"]
+    mom = make_plant(client, "Chain Mom", sex="female", grow_id=grow["id"], group_id=gid)
+    dad = make_plant(client, "Chain Dad", sex="male", grow_id=grow["id"], group_id=gid)
+    po = client.post("/api/pollen", json={"source_plant_id": dad["id"]}).json()
+    ev = client.post("/api/seed-production", json={
+        "parent_a_plant_id": mom["id"], "pollen_collection_id": po["id"],
+        "event_type": "intentional_cross",
+    }).json()
+
+    assert client.delete(f"/api/grows/{grow['id']}").status_code == 400
+    assert client.delete(f"/api/plants/{dad['id']}").status_code == 400
+    assert client.delete(f"/api/pollen/{po['id']}").status_code == 400
+
+    assert client.delete(f"/api/seed-production/{ev['id']}").status_code == 200
+    assert client.delete(f"/api/pollen/{po['id']}").status_code == 200
+    assert client.delete(f"/api/plants/{dad['id']}").status_code == 200
+    assert client.delete(f"/api/grows/{grow['id']}").status_code == 200

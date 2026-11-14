@@ -373,6 +373,15 @@ def delete_grow(grow_id: int, db: Session = Depends(get_db)):
                 "Can't delete this grow: one of its plants is recorded as a parent "
                 "in a seed-production event. Remove that breeding record first.",
             )
+        has_pollen = db.query(models.PollenCollection).filter(
+            models.PollenCollection.source_plant_id.in_(plant_ids)
+        ).first()
+        if has_pollen:
+            raise HTTPException(
+                400,
+                "Can't delete this grow: pollen was collected from one of its plants. "
+                "Delete those pollen records first.",
+            )
 
     def _remove_file(filename: str):
         try:
@@ -512,6 +521,15 @@ def delete_plant(plant_id: int, db: Session = Depends(get_db)):
             400,
             "Can't delete this plant: it's recorded as a parent in a seed-production "
             "event. Remove that breeding record first.",
+        )
+    has_pollen = db.query(models.PollenCollection).filter_by(
+        source_plant_id=plant_id
+    ).first()
+    if has_pollen:
+        raise HTTPException(
+            400,
+            "Can't delete this plant: pollen was collected from it. "
+            "Delete those pollen records first.",
         )
     # Remove this plant's photo files from disk (rows cascade with the plant).
     for photo in plant.photos:
