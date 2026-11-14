@@ -47,10 +47,22 @@ def test_strain_blocked_lists_seeds_plants_and_children(client):
     labels = [b["label"] for b in d["blocked_by"]]
     actions = [b["action"] for b in d["blocked_by"]]
     assert actions == ["delete", "unlink", "unlink"]        # deletes first
-    assert labels[0].startswith("1 seed batch")
+    assert labels[0] == "1 seed batch — Blocked Strain (2 seeds)"
     assert labels[1].startswith("1 plant")
     assert "Direct Plant" in labels[1]
     assert "Child Strain" in labels[2]
+
+
+def test_strain_blocker_truncates_to_three_names(client):
+    s = strain(client, "Crowded Strain")
+    for i in range(1, 5):
+        make_plant(client, f"Crowd Plant {i}", strain_id=s["id"])
+
+    d = client.delete(f"/api/strains/{s['id']}").json()["detail"]
+    label = [x for x in d["blocked_by"] if "plant" in x["label"]][0]["label"]
+    assert label.startswith("4 plants")
+    assert label.endswith("and 1 more")
+    assert sum(f"Crowd Plant {i}" in label for i in range(1, 5)) == 3
 
 
 def test_strain_blockers_reach_plants_through_the_seed_batch(client):
@@ -80,7 +92,14 @@ def test_plant_linked_both_ways_is_counted_once(client):
 def test_strain_cascade_deletes_batches_and_unlinks_the_rest(client):
     s = strain(client, "Cascade Strain")
     b = batch(client, s["id"], quantity=2)
-    p = make_plant(client, "Cascade Plant", seed_id=b["id"])
+    grow = client.post("/api/grows", json={
+        "name": "Cascade Grow", "groups": [{"name": "G1"}],
+    }).json()
+    p = make_plant(client, "Cascade Plant", seed_id=b["id"],
+                   grow_id=grow["id"], group_id=grow["groups"][0]["id"])
+    ci = client.post("/api/checkins", json={
+        "grow_id": grow["id"], "plant_id": p["id"], "notes": "Cascade check-in",
+    }).json()
     child = client.post("/api/strains", json={"name": "Cascade Child", "parent_b_id": s["id"]}).json()
 
     r = client.delete(f"/api/strains/{s['id']}?cascade=true")
@@ -93,6 +112,10 @@ def test_strain_cascade_deletes_batches_and_unlinks_the_rest(client):
     assert after["strain_id"] is None          # the strain is going too — nothing to inherit
     assert after["strain_name"] is None
     assert client.get(f"/api/strains/{child['id']}").json()["parent_b_id"] is None
+    # the grow, its plant and its check-in are untouched
+    assert client.get(f"/api/grows/{grow['id']}").status_code == 200
+    assert client.get(f"/api/plants/{p['id']}").status_code == 200
+    assert ci["id"] in [c["id"] for c in client.get(f"/api/checkins?grow_id={grow['id']}").json()]
 
 
 def test_strain_cascade_with_no_blockers_succeeds(client):
