@@ -6,12 +6,13 @@ splitting into a dozen router files would obscure more than it clarifies.
 import os
 import uuid
 from datetime import date
-from typing import List, Optional
+from typing import List, NoReturn, Optional, Tuple
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from PIL import Image, ExifTags
 
@@ -86,6 +87,43 @@ def whoami(authorization: Optional[str] = Header(None)):
     return {"username": username}
 
 
+# ============ Deletes ============
+
+def _blocker(names: List[str], singular: str, plural: str, action: str) -> dict:
+    """One `blocked_by` entry: a finished label the UI prints verbatim.
+
+    `action` is "delete" (cascade removes it) or "unlink" (cascade only clears
+    the reference). Shows up to 3 names, then "and N more".
+    """
+    n = len(names)
+    label = f"{n} {singular if n == 1 else plural}"
+    if names:
+        label += " — " + ", ".join(names[:3])
+        if n > 3:
+            label += f" and {n - 3} more"
+    return {"label": label, "action": action}
+
+
+def _raise_blocked(message: str, blockers: List[dict]) -> NoReturn:
+    raise HTTPException(409, {"error": "delete_blocked", "message": message, "blocked_by": blockers})
+
+
+def _strain_dependents(
+    db: Session, strain_id: int
+) -> Tuple[List[models.Seed], List[models.Plant], List[models.Strain]]:
+    """Seed batches of a strain, plants using it (directly or via a batch), and child strains."""
+    seeds = db.query(models.Seed).filter(models.Seed.strain_id == strain_id).all()
+    batch_ids = [s.id for s in seeds]
+    cond = models.Plant.strain_id == strain_id
+    if batch_ids:
+        cond = or_(cond, models.Plant.seed_id.in_(batch_ids))
+    plants = db.query(models.Plant).filter(cond).all()
+    children = db.query(models.Strain).filter(
+        or_(models.Strain.parent_a_id == strain_id, models.Strain.parent_b_id == strain_id)
+    ).all()
+    return seeds, plants, children
+
+
 # ============ Strains ============
 
 @app.get("/api/strains", response_model=List[schemas.StrainOut])
@@ -150,6 +188,41 @@ def get_lineage(strain_id: int, db: Session = Depends(get_db)):
     if not strain:
         raise HTTPException(404, "Strain not found")
     return build(strain)
+
+
+@app.delete("/api/strains/{strain_id}")
+def delete_strain(strain_id: int, cascade: bool = False, db: Session = Depends(get_db)):
+    strain = db.get(models.Strain, strain_id)
+    if not strain:
+        raise HTTPException(404, "Strain not found")
+    seeds, plants, children = _strain_dependents(db, strain_id)
+    if (seeds or plants or children) and not cascade:
+        batch_names = [
+            f"{s.strain.name if s.strain else strain.name}" + (f" ({s.quantity} seeds)" if s.quantity else "")
+            for s in seeds
+        ]
+        blockers = []
+        if seeds:
+            blockers.append(_blocker(batch_names, "seed batch", "seed batches", "delete"))
+        if plants:
+            blockers.append(_blocker([p.label for p in plants], "plant", "plants", "unlink"))
+        if children:
+            blockers.append(_blocker([c.name for c in children], "child strain", "child strains", "unlink"))
+        _raise_blocked("Other records use this strain.", blockers)
+    for plant in plants:
+        plant.seed_id = None
+        plant.strain_id = None
+    for child in children:
+        if child.parent_a_id == strain_id:
+            child.parent_a_id = None
+        if child.parent_b_id == strain_id:
+            child.parent_b_id = None
+    db.flush()
+    for seed in seeds:
+        db.delete(seed)
+    db.delete(strain)
+    db.commit()
+    return {"ok": True, "id": strain_id}
 
 
 # ============ Seeds ============
