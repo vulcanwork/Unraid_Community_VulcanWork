@@ -124,6 +124,19 @@ def _strain_dependents(
     return seeds, plants, children
 
 
+def _unlink_plants_from_seed(seed: models.Seed, plants: List[models.Plant]) -> None:
+    """Detach plants from a seed batch, letting them keep the batch's strain.
+
+    A plant with no strain of its own inherits `seed.strain_id`; one that has
+    its own keeps it. Callers that are also deleting that strain must clear
+    `strain_id` themselves afterwards.
+    """
+    for plant in plants:
+        if plant.strain_id is None:
+            plant.strain_id = seed.strain_id
+        plant.seed_id = None
+
+
 # ============ Strains ============
 
 @app.get("/api/strains", response_model=List[schemas.StrainOut])
@@ -198,7 +211,7 @@ def delete_strain(strain_id: int, cascade: bool = False, db: Session = Depends(g
     seeds, plants, children = _strain_dependents(db, strain_id)
     if (seeds or plants or children) and not cascade:
         batch_names = [
-            f"{s.strain.name if s.strain else strain.name}" + (f" ({s.quantity} seeds)" if s.quantity else "")
+            strain.name + (f" ({s.quantity} {'seed' if s.quantity == 1 else 'seeds'})" if s.quantity else "")
             for s in seeds
         ]
         blockers = []
@@ -209,9 +222,12 @@ def delete_strain(strain_id: int, cascade: bool = False, db: Session = Depends(g
         if children:
             blockers.append(_blocker([c.name for c in children], "child strain", "child strains", "unlink"))
         _raise_blocked("Other records use this strain.", blockers)
+    for seed in seeds:
+        _unlink_plants_from_seed(seed, [p for p in plants if p.seed_id == seed.id])
     for plant in plants:
-        plant.seed_id = None
-        plant.strain_id = None
+        # Clear only the reference to this strain; a plant's own other strain stays.
+        if plant.strain_id == strain_id:
+            plant.strain_id = None
     for child in children:
         if child.parent_a_id == strain_id:
             child.parent_a_id = None
@@ -268,6 +284,23 @@ def update_seed(seed_id: int, payload: schemas.SeedUpdate, db: Session = Depends
     db.commit()
     db.refresh(seed)
     return _seed_to_out(seed)
+
+
+@app.delete("/api/seeds/{seed_id}")
+def delete_seed(seed_id: int, cascade: bool = False, db: Session = Depends(get_db)):
+    seed = db.get(models.Seed, seed_id)
+    if not seed:
+        raise HTTPException(404, "Seed not found")
+    plants = db.query(models.Plant).filter(models.Plant.seed_id == seed_id).all()
+    if plants and not cascade:
+        _raise_blocked(
+            "Plants were grown from this seed batch.",
+            [_blocker([p.label for p in plants], "plant", "plants", "unlink")],
+        )
+    _unlink_plants_from_seed(seed, plants)
+    db.delete(seed)
+    db.commit()
+    return {"ok": True, "id": seed_id}
 
 
 # ============ Grows ============

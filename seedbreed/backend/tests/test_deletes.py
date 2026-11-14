@@ -94,3 +94,84 @@ def test_strain_delete_missing_and_anonymous(client, anon_client):
     assert client.delete("/api/strains/999999").status_code == 404
     s = strain(client, "Guarded Strain")
     assert anon_client.delete(f"/api/strains/{s['id']}").status_code == 401
+
+
+def test_unused_seed_batch_deletes(client):
+    s = strain(client, "Seed Delete Strain")
+    b = batch(client, s["id"], quantity=3)
+    r = client.delete(f"/api/seeds/{b['id']}")
+    assert r.status_code == 200, r.text
+    assert b["id"] not in [x["id"] for x in client.get("/api/seeds").json()]
+
+
+def test_seed_blocked_by_its_plants(client):
+    s = strain(client, "Planted Batch Strain")
+    b = batch(client, s["id"], quantity=2)
+    make_plant(client, "Grown From Batch", seed_id=b["id"])
+
+    r = client.delete(f"/api/seeds/{b['id']}")
+    assert r.status_code == 409, r.text
+    d = r.json()["detail"]
+    assert [x["action"] for x in d["blocked_by"]] == ["unlink"]
+    assert "Grown From Batch" in d["blocked_by"][0]["label"]
+
+
+def test_seed_cascade_lets_the_plant_inherit_the_strain(client):
+    s = strain(client, "Inherited Strain")
+    b = batch(client, s["id"], quantity=2)
+    p = make_plant(client, "Inheritor", seed_id=b["id"])
+    assert client.get(f"/api/plants/{p['id']}").json()["strain_name"] == "Inherited Strain"
+
+    assert client.delete(f"/api/seeds/{b['id']}?cascade=true").status_code == 200
+    after = client.get(f"/api/plants/{p['id']}").json()
+    assert after["seed_id"] is None
+    assert after["strain_id"] == s["id"]          # inherited, not blanked
+    assert after["strain_name"] == "Inherited Strain"
+
+
+def test_seed_cascade_does_not_overwrite_an_existing_strain(client):
+    """Review Focus 4 — the plant's own strain wins over the batch's."""
+    own = strain(client, "Plant Own Strain")
+    other = strain(client, "Batch Other Strain")
+    b = batch(client, other["id"], quantity=1)
+    p = make_plant(client, "Keeps Own Strain", strain_id=own["id"], seed_id=b["id"])
+
+    assert client.delete(f"/api/seeds/{b['id']}?cascade=true").status_code == 200
+    after = client.get(f"/api/plants/{p['id']}").json()
+    assert after["strain_id"] == own["id"]
+    assert after["strain_name"] == "Plant Own Strain"
+
+
+def test_seed_cascade_with_no_blockers_succeeds(client):
+    """Review Focus 2."""
+    s = strain(client, "Clear Batch Strain")
+    b = batch(client, s["id"], quantity=1)
+    assert client.delete(f"/api/seeds/{b['id']}?cascade=true").status_code == 200
+
+
+def test_seed_delete_missing_and_anonymous(client, anon_client):
+    assert client.delete("/api/seeds/999999").status_code == 404
+    s = strain(client, "Guarded Batch Strain")
+    b = batch(client, s["id"], quantity=1)
+    assert anon_client.delete(f"/api/seeds/{b['id']}").status_code == 401
+
+
+def test_strain_cascade_keeps_a_plants_unrelated_strain(client):
+    """A plant reached via this strain's batch keeps its own, different strain."""
+    doomed = strain(client, "Doomed Strain")
+    keeper = strain(client, "Keeper Strain")
+    b = batch(client, doomed["id"], quantity=2)
+    p = make_plant(client, "Cross Plant", strain_id=keeper["id"], seed_id=b["id"])
+
+    assert client.delete(f"/api/strains/{doomed['id']}?cascade=true").status_code == 200
+    after = client.get(f"/api/plants/{p['id']}").json()
+    assert after["seed_id"] is None
+    assert after["strain_id"] == keeper["id"]
+
+
+def test_strain_blocker_label_uses_singular_seed(client):
+    s = strain(client, "One Seed Strain")
+    batch(client, s["id"], quantity=1)
+    label = client.delete(f"/api/strains/{s['id']}").json()["detail"]["blocked_by"][0]["label"]
+    assert "(1 seed)" in label
+    assert "1 seeds" not in label
