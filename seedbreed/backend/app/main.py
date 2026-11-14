@@ -353,7 +353,8 @@ def delete_grow(grow_id: int, db: Session = Depends(get_db)):
 
     Guarded: if any plant in this grow is recorded as a parent in a
     seed-production (breeding) event, the delete is blocked so we don't corrupt
-    that lineage — remove the breeding record first.
+    that lineage — remove the breeding record first. Likewise blocked if any
+    plant in this grow has a pollen record — delete the pollen first.
     """
     grow = db.get(models.Grow, grow_id)
     if not grow:
