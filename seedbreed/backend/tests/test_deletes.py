@@ -2,6 +2,18 @@
 from tests.conftest import make_plant
 
 
+def cross(client, tag):
+    """A female mother, a male father with one pollen record. Returns (mom, dad, pollen)."""
+    mom_strain = client.post("/api/strains", json={"name": f"Mom Strain {tag}"}).json()
+    dad_strain = client.post("/api/strains", json={"name": f"Dad Strain {tag}"}).json()
+    mom = make_plant(client, f"Mom {tag}", sex="female", strain_id=mom_strain["id"])
+    dad = make_plant(client, f"Dad {tag}", sex="male", strain_id=dad_strain["id"])
+    pollen = client.post("/api/pollen", json={
+        "source_plant_id": dad["id"], "collected_date": "2026-08-14",
+    }).json()
+    return mom, dad, pollen
+
+
 def strain(client, name):
     r = client.post("/api/strains", json={"name": name})
     assert r.status_code == 200, r.text
@@ -175,3 +187,86 @@ def test_strain_blocker_label_uses_singular_seed(client):
     label = client.delete(f"/api/strains/{s['id']}").json()["detail"]["blocked_by"][0]["label"]
     assert "(1 seed)" in label
     assert "1 seeds" not in label
+
+
+def test_cross_with_unplanted_seeds_deletes_in_one_call(client):
+    mom, dad, pollen = cross(client, "D1")
+    ev = client.post("/api/seed-production", json={
+        "parent_a_plant_id": mom["id"], "pollen_collection_id": pollen["id"],
+        "event_type": "intentional_cross", "new_strain_name": "Unplanted Cross",
+    }).json()
+    produced = [s for s in client.get("/api/seeds").json()
+                if s["produced_by_event_id"] == ev["id"]]
+    assert len(produced) == 1
+
+    r = client.delete(f"/api/seed-production/{ev['id']}")
+    assert r.status_code == 200, r.text
+    assert ev["id"] not in [e["id"] for e in client.get("/api/seed-production").json()]
+    assert produced[0]["id"] not in [s["id"] for s in client.get("/api/seeds").json()]
+    # the named strain survives on its own
+    assert "Unplanted Cross" in [s["name"] for s in client.get("/api/strains").json()]
+
+
+def test_cross_with_planted_seeds_is_blocked(client):
+    mom, dad, pollen = cross(client, "D2")
+    ev = client.post("/api/seed-production", json={
+        "parent_a_plant_id": mom["id"], "pollen_collection_id": pollen["id"],
+        "event_type": "intentional_cross", "new_strain_name": "Planted Cross",
+    }).json()
+    produced = [s for s in client.get("/api/seeds").json()
+                if s["produced_by_event_id"] == ev["id"]][0]
+    make_plant(client, "Child Of Cross", seed_id=produced["id"])
+
+    r = client.delete(f"/api/seed-production/{ev['id']}")
+    assert r.status_code == 409, r.text
+    d = r.json()["detail"]
+    assert [x["action"] for x in d["blocked_by"]] == ["delete", "unlink"]
+    assert "Child Of Cross" in d["blocked_by"][1]["label"]
+
+
+def test_cross_cascade_unlinks_the_plant_and_keeps_the_strain(client):
+    mom, dad, pollen = cross(client, "D3")
+    ev = client.post("/api/seed-production", json={
+        "parent_a_plant_id": mom["id"], "pollen_collection_id": pollen["id"],
+        "event_type": "intentional_cross", "new_strain_name": "Cascade Cross",
+    }).json()
+    produced = [s for s in client.get("/api/seeds").json()
+                if s["produced_by_event_id"] == ev["id"]][0]
+    p = make_plant(client, "Survivor Of Cross", seed_id=produced["id"])
+
+    assert client.delete(f"/api/seed-production/{ev['id']}?cascade=true").status_code == 200
+    after = client.get(f"/api/plants/{p['id']}").json()
+    assert after["seed_id"] is None
+    assert after["strain_name"] == "Cascade Cross"     # inherited from the batch
+    assert "Cascade Cross" in [s["name"] for s in client.get("/api/strains").json()]
+
+
+def test_unnamed_cross_deletes_with_no_produced_batch(client):
+    mom, dad, pollen = cross(client, "D4")
+    ev = client.post("/api/seed-production", json={
+        "parent_a_plant_id": mom["id"], "pollen_collection_id": pollen["id"],
+        "event_type": "intentional_cross",
+    }).json()
+    assert client.delete(f"/api/seed-production/{ev['id']}").status_code == 200
+
+
+def test_deleting_a_cross_frees_its_pollen(client):
+    """The block on pollen delete is what made events need deleting."""
+    mom, dad, pollen = cross(client, "D5")
+    ev = client.post("/api/seed-production", json={
+        "parent_a_plant_id": mom["id"], "pollen_collection_id": pollen["id"],
+        "event_type": "intentional_cross",
+    }).json()
+    assert client.delete(f"/api/pollen/{pollen['id']}").status_code == 400
+    assert client.delete(f"/api/seed-production/{ev['id']}").status_code == 200
+    assert client.delete(f"/api/pollen/{pollen['id']}").status_code == 200
+
+
+def test_cross_delete_missing_and_anonymous(client, anon_client):
+    assert client.delete("/api/seed-production/999999").status_code == 404
+    mom, dad, pollen = cross(client, "D6")
+    ev = client.post("/api/seed-production", json={
+        "parent_a_plant_id": mom["id"], "pollen_collection_id": pollen["id"],
+        "event_type": "intentional_cross",
+    }).json()
+    assert anon_client.delete(f"/api/seed-production/{ev['id']}").status_code == 401

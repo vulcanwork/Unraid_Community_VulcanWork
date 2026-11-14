@@ -970,6 +970,46 @@ def update_seed_production(event_id: int, payload: schemas.SeedProductionUpdate,
     return _sp_to_out(event)
 
 
+@app.delete("/api/seed-production/{event_id}")
+def delete_seed_production(event_id: int, cascade: bool = False, db: Session = Depends(get_db)):
+    """Delete a breeding event and the seed batch(es) it auto-created.
+
+    The batch exists only because the event does, so an unplanted one goes with
+    it. Once plants were grown from it the delete is blocked (or, with
+    cascade, those plants are unlinked). The strain the event named is kept.
+    """
+    event = db.get(models.SeedProductionEvent, event_id)
+    if not event:
+        raise HTTPException(404, "Seed-production event not found")
+    seeds = db.query(models.Seed).filter(models.Seed.produced_by_event_id == event_id).all()
+    plants = []
+    if seeds:
+        plants = db.query(models.Plant).filter(
+            models.Plant.seed_id.in_([s.id for s in seeds])
+        ).all()
+    if plants and not cascade:
+        batch_names = [
+            f"{s.strain.name if s.strain else 'Seed batch'}"
+            + (f" ({s.quantity} {'seed' if s.quantity == 1 else 'seeds'})" if s.quantity else "")
+            for s in seeds
+        ]
+        _raise_blocked(
+            "Plants were grown from the seeds this cross produced.",
+            [
+                _blocker(batch_names, "seed batch", "seed batches", "delete"),
+                _blocker([p.label for p in plants], "plant", "plants", "unlink"),
+            ],
+        )
+    for seed in seeds:
+        _unlink_plants_from_seed(seed, [p for p in plants if p.seed_id == seed.id])
+    db.flush()
+    for seed in seeds:
+        db.delete(seed)
+    db.delete(event)
+    db.commit()
+    return {"ok": True, "id": event_id}
+
+
 # ============ Dashboard summary ============
 
 @app.get("/api/dashboard")
