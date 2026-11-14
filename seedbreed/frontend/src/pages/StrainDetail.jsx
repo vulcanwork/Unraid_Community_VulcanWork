@@ -1,19 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api.js';
+import LoadFailed from '../components/LoadFailed.jsx';
 
 export default function StrainDetail() {
   const { id } = useParams();
   const [strain, setStrain] = useState(null);
   const [lineage, setLineage] = useState(null);
   const [seeds, setSeeds] = useState([]);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
-    api.get(`/api/strains/${id}`).then(setStrain);
-    api.get(`/api/strains/${id}/lineage`).then(setLineage);
-    api.get('/api/seeds').then((all) => setSeeds(all.filter((s) => s.strain_id === parseInt(id))));
+    // Caught, or a deleted strain leaves the page on "Loading…" for good.
+    setLoadError(null);
+    Promise.all([
+      api.get(`/api/strains/${id}`).then(setStrain),
+      api.get(`/api/strains/${id}/lineage`).then(setLineage),
+      api.get('/api/seeds').then((all) => setSeeds(all.filter((s) => s.strain_id === parseInt(id)))),
+    ]).catch(setLoadError);
   }, [id]);
 
+  if (loadError) return <LoadFailed error={loadError} noun="strain" backTo="/strains" backLabel="All strains" />;
   if (!strain) return <div className="muted">Loading…</div>;
 
   return (

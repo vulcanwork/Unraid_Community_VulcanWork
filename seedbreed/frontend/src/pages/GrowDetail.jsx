@@ -1,6 +1,7 @@
 import { useEffect, useState, Fragment } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import LoadFailed from '../components/LoadFailed.jsx';
 
 const MAX_PLANTS_PER_GROUP = 4;
 
@@ -35,16 +36,24 @@ export default function GrowDetail() {
   const [editFert, setEditFert] = useState(null);
   const [showEditGrow, setShowEditGrow] = useState(false);
   const [plantModal, setPlantModal] = useState(null); // { group, existing? }
+  const [loadError, setLoadError] = useState(null);
 
   const load = async () => {
-    const [g, p, st, c, f] = await Promise.all([
-      api.get(`/api/grows/${id}`),
-      api.get(`/api/plants?grow_id=${id}`),
-      api.get('/api/strains'),
-      api.get(`/api/checkins?grow_id=${id}`),
-      api.get(`/api/fertilizer-events?grow_id=${id}`),
-    ]);
-    setGrow(g); setPlants(p); setStrains(st); setCheckins(c); setFert(f);
+    try {
+      const [g, p, st, c, f] = await Promise.all([
+        api.get(`/api/grows/${id}`),
+        api.get(`/api/plants?grow_id=${id}`),
+        api.get('/api/strains'),
+        api.get(`/api/checkins?grow_id=${id}`),
+        api.get(`/api/fertilizer-events?grow_id=${id}`),
+      ]);
+      setGrow(g); setPlants(p); setStrains(st); setCheckins(c); setFert(f);
+      setLoadError(null);
+    } catch (e) {
+      // Without this the page sits on "Loading…" for good. The usual cause is
+      // a bookmarked or back-button URL for a grow that has since been deleted.
+      setLoadError(e);
+    }
   };
   useEffect(() => { load(); }, [id]);
 
@@ -59,6 +68,7 @@ export default function GrowDetail() {
     catch (e) { alert(e.message); }
   };
 
+  if (loadError) return <LoadFailed error={loadError} noun="grow" backTo="/grows" backLabel="All grows" />;
   if (!grow) return <div className="muted">Loading…</div>;
 
   const groupPlants = (gid) => plants.filter((p) => p.group_id === gid);
