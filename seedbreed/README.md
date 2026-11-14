@@ -39,7 +39,8 @@ you're logging your own.
 
 ## Deleting things
 
-Strains, seed batches, breeding events, grows, plants and pollen can be deleted from the page that lists them. If other records depend
+Strains, seed batches, breeding events, grows, plants and pollen can be
+deleted from the page that lists them. If other records depend
 on it, the delete is refused with a list of what's in the way, and you can
 choose **Delete all** to take them with it (linked records are unlinked, not
 removed). Pollen, plants and grows have to be unwound by hand, in the order
