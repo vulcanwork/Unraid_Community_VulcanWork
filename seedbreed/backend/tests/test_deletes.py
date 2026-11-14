@@ -270,3 +270,20 @@ def test_cross_delete_missing_and_anonymous(client, anon_client):
         "event_type": "intentional_cross",
     }).json()
     assert anon_client.delete(f"/api/seed-production/{ev['id']}").status_code == 401
+
+
+def test_cross_cascade_with_no_blockers_succeeds(client):
+    """Review Focus 2."""
+    mom, dad, pollen = cross(client, "D7")
+    ev = client.post("/api/seed-production", json={
+        "parent_a_plant_id": mom["id"], "pollen_collection_id": pollen["id"],
+        "event_type": "intentional_cross", "new_strain_name": "Idle Cascade Cross",
+    }).json()
+    produced = [s for s in client.get("/api/seeds").json()
+                if s["produced_by_event_id"] == ev["id"]]
+    assert len(produced) == 1
+
+    r = client.delete(f"/api/seed-production/{ev['id']}?cascade=true")
+    assert r.status_code == 200, r.text
+    assert ev["id"] not in [e["id"] for e in client.get("/api/seed-production").json()]
+    assert produced[0]["id"] not in [x["id"] for x in client.get("/api/seeds").json()]

@@ -989,7 +989,7 @@ def delete_seed_production(event_id: int, cascade: bool = False, db: Session = D
         ).all()
     if plants and not cascade:
         batch_names = [
-            f"{s.strain.name if s.strain else 'Seed batch'}"
+            (s.strain.name if s.strain else "Seed batch")
             + (f" ({s.quantity} {'seed' if s.quantity == 1 else 'seeds'})" if s.quantity else "")
             for s in seeds
         ]
