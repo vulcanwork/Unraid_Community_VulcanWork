@@ -37,6 +37,15 @@ A fresh install seeds one example grow (two strains, two comparison groups,
 four plants) so the UI isn't empty on first boot. Edit or delete it once
 you're logging your own.
 
+## Deleting things
+
+Anything can be deleted from the page that lists it. If other records depend
+on it, the delete is refused with a list of what's in the way, and you can
+choose **Delete all** to take them with it (linked records are unlinked, not
+removed). Pollen, plants and grows have to be unwound by hand, in the order
+cross → pollen → plant → grow. The example data a fresh install seeds can
+now be cleared out entirely.
+
 ---
 
 ## Quick start (Docker Compose)

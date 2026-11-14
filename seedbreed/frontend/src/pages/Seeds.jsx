@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
+import DeleteButton from '../components/DeleteButton.jsx';
 
 export default function Seeds() {
   const [seeds, setSeeds] = useState([]);
@@ -49,6 +50,11 @@ export default function Seeds() {
               </div>
               <div className="row-actions">
                 <button className="small-btn" onClick={() => setEditSeed(s)}>Edit</button>
+                <DeleteButton
+                  path={`/api/seeds/${s.id}`}
+                  label={s.strain_name || `Strain #${s.strain_id}`}
+                  onDeleted={load}
+                />
                 <Link to={`/strains/${s.strain_id}`} className="muted small">view strain →</Link>
               </div>
             </div>

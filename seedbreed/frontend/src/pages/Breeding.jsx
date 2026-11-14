@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import DeleteButton from '../components/DeleteButton.jsx';
 import { sexBadge } from './GrowDetail.jsx';
 
 const POLLEN_SEXES = new Set(['male', 'hermaphrodite']);
@@ -139,6 +140,12 @@ export default function Breeding() {
               </div>
               <div className="row-actions">
                 <button className="small-btn" onClick={() => setEditEvent(e)}>Edit</button>
+                <DeleteButton
+                  path={`/api/seed-production/${e.id}`}
+                  label={e.parent_b_label ? `${e.parent_a_label} × ${e.parent_b_label}` : e.parent_a_label}
+                  confirmText="Delete this cross? The seed batch it created goes with it."
+                  onDeleted={load}
+                />
               </div>
             </div>
           ))}
