@@ -38,7 +38,18 @@ async function req(method, path, body, isForm = false) {
       throw err;
     }
     const text = await r.text();
-    const err = new Error(`${r.status} ${r.statusText}: ${text}`);
+    let message = `${r.status} ${r.statusText}: ${text}`;
+    let detail;
+    // The body is usually FastAPI JSON, but nginx answers 502/504 with HTML,
+    // so a failed parse must fall back to the raw text rather than throw.
+    try {
+      detail = JSON.parse(text).detail;
+    } catch {
+      detail = undefined;
+    }
+    if (typeof detail === 'string') message = detail;
+    const err = new Error(message);
+    if (detail && typeof detail === 'object') err.detail = detail;
     err.status = r.status;
     throw err;
   }

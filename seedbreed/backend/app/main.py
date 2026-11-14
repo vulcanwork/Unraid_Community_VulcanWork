@@ -6,12 +6,13 @@ splitting into a dozen router files would obscure more than it clarifies.
 import os
 import uuid
 from datetime import date
-from typing import List, Optional
+from typing import List, NoReturn, Optional, Tuple
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from PIL import Image, ExifTags
 
@@ -86,6 +87,56 @@ def whoami(authorization: Optional[str] = Header(None)):
     return {"username": username}
 
 
+# ============ Deletes ============
+
+def _blocker(names: List[str], singular: str, plural: str, action: str) -> dict:
+    """One `blocked_by` entry: a finished label the UI prints verbatim.
+
+    `action` is "delete" (cascade removes it) or "unlink" (cascade only clears
+    the reference). Shows up to 3 names, then "and N more".
+    """
+    n = len(names)
+    label = f"{n} {singular if n == 1 else plural}"
+    if names:
+        label += " — " + ", ".join(names[:3])
+        if n > 3:
+            label += f" and {n - 3} more"
+    return {"label": label, "action": action}
+
+
+def _raise_blocked(message: str, blockers: List[dict]) -> NoReturn:
+    raise HTTPException(409, {"error": "delete_blocked", "message": message, "blocked_by": blockers})
+
+
+def _strain_dependents(
+    db: Session, strain_id: int
+) -> Tuple[List[models.Seed], List[models.Plant], List[models.Strain]]:
+    """Seed batches of a strain, plants using it (directly or via a batch), and child strains."""
+    seeds = db.query(models.Seed).filter(models.Seed.strain_id == strain_id).all()
+    batch_ids = [s.id for s in seeds]
+    cond = models.Plant.strain_id == strain_id
+    if batch_ids:
+        cond = or_(cond, models.Plant.seed_id.in_(batch_ids))
+    plants = db.query(models.Plant).filter(cond).all()
+    children = db.query(models.Strain).filter(
+        or_(models.Strain.parent_a_id == strain_id, models.Strain.parent_b_id == strain_id)
+    ).all()
+    return seeds, plants, children
+
+
+def _unlink_plants_from_seed(seed: models.Seed, plants: List[models.Plant]) -> None:
+    """Detach plants from a seed batch, letting them keep the batch's strain.
+
+    A plant with no strain of its own inherits `seed.strain_id`; one that has
+    its own keeps it. Callers that are also deleting that strain must clear
+    `strain_id` themselves afterwards.
+    """
+    for plant in plants:
+        if plant.strain_id is None:
+            plant.strain_id = seed.strain_id
+        plant.seed_id = None
+
+
 # ============ Strains ============
 
 @app.get("/api/strains", response_model=List[schemas.StrainOut])
@@ -152,6 +203,44 @@ def get_lineage(strain_id: int, db: Session = Depends(get_db)):
     return build(strain)
 
 
+@app.delete("/api/strains/{strain_id}")
+def delete_strain(strain_id: int, cascade: bool = False, db: Session = Depends(get_db)):
+    strain = db.get(models.Strain, strain_id)
+    if not strain:
+        raise HTTPException(404, "Strain not found")
+    seeds, plants, children = _strain_dependents(db, strain_id)
+    if (seeds or plants or children) and not cascade:
+        batch_names = [
+            strain.name + (f" ({s.quantity} {'seed' if s.quantity == 1 else 'seeds'})" if s.quantity else "")
+            for s in seeds
+        ]
+        blockers = []
+        if seeds:
+            blockers.append(_blocker(batch_names, "seed batch", "seed batches", "delete"))
+        if plants:
+            blockers.append(_blocker([p.label for p in plants], "plant", "plants", "unlink"))
+        if children:
+            blockers.append(_blocker([c.name for c in children], "child strain", "child strains", "unlink"))
+        _raise_blocked("Other records use this strain.", blockers)
+    for seed in seeds:
+        _unlink_plants_from_seed(seed, [p for p in plants if p.seed_id == seed.id])
+    for plant in plants:
+        # Clear only the reference to this strain; a plant's own other strain stays.
+        if plant.strain_id == strain_id:
+            plant.strain_id = None
+    for child in children:
+        if child.parent_a_id == strain_id:
+            child.parent_a_id = None
+        if child.parent_b_id == strain_id:
+            child.parent_b_id = None
+    db.flush()
+    for seed in seeds:
+        db.delete(seed)
+    db.delete(strain)
+    db.commit()
+    return {"ok": True, "id": strain_id}
+
+
 # ============ Seeds ============
 
 def _seed_to_out(seed: models.Seed) -> schemas.SeedOut:
@@ -195,6 +284,23 @@ def update_seed(seed_id: int, payload: schemas.SeedUpdate, db: Session = Depends
     db.commit()
     db.refresh(seed)
     return _seed_to_out(seed)
+
+
+@app.delete("/api/seeds/{seed_id}")
+def delete_seed(seed_id: int, cascade: bool = False, db: Session = Depends(get_db)):
+    seed = db.get(models.Seed, seed_id)
+    if not seed:
+        raise HTTPException(404, "Seed not found")
+    plants = db.query(models.Plant).filter(models.Plant.seed_id == seed_id).all()
+    if plants and not cascade:
+        _raise_blocked(
+            "Plants were grown from this seed batch.",
+            [_blocker([p.label for p in plants], "plant", "plants", "unlink")],
+        )
+    _unlink_plants_from_seed(seed, plants)
+    db.delete(seed)
+    db.commit()
+    return {"ok": True, "id": seed_id}
 
 
 # ============ Grows ============
@@ -247,7 +353,8 @@ def delete_grow(grow_id: int, db: Session = Depends(get_db)):
 
     Guarded: if any plant in this grow is recorded as a parent in a
     seed-production (breeding) event, the delete is blocked so we don't corrupt
-    that lineage — remove the breeding record first.
+    that lineage — remove the breeding record first. Likewise blocked if any
+    plant in this grow has a pollen record — delete the pollen first.
     """
     grow = db.get(models.Grow, grow_id)
     if not grow:
@@ -266,6 +373,15 @@ def delete_grow(grow_id: int, db: Session = Depends(get_db)):
                 400,
                 "Can't delete this grow: one of its plants is recorded as a parent "
                 "in a seed-production event. Remove that breeding record first.",
+            )
+        has_pollen = db.query(models.PollenCollection).filter(
+            models.PollenCollection.source_plant_id.in_(plant_ids)
+        ).first()
+        if has_pollen:
+            raise HTTPException(
+                400,
+                "Can't delete this grow: pollen was collected from one of its plants. "
+                "Delete those pollen records first.",
             )
 
     def _remove_file(filename: str):
@@ -406,6 +522,15 @@ def delete_plant(plant_id: int, db: Session = Depends(get_db)):
             400,
             "Can't delete this plant: it's recorded as a parent in a seed-production "
             "event. Remove that breeding record first.",
+        )
+    has_pollen = db.query(models.PollenCollection).filter_by(
+        source_plant_id=plant_id
+    ).first()
+    if has_pollen:
+        raise HTTPException(
+            400,
+            "Can't delete this plant: pollen was collected from it. "
+            "Delete those pollen records first.",
         )
     # Remove this plant's photo files from disk (rows cascade with the plant).
     for photo in plant.photos:
@@ -862,6 +987,46 @@ def update_seed_production(event_id: int, payload: schemas.SeedProductionUpdate,
     db.commit()
     db.refresh(event)
     return _sp_to_out(event)
+
+
+@app.delete("/api/seed-production/{event_id}")
+def delete_seed_production(event_id: int, cascade: bool = False, db: Session = Depends(get_db)):
+    """Delete a breeding event and the seed batch(es) it auto-created.
+
+    The batch exists only because the event does, so an unplanted one goes with
+    it. Once plants were grown from it the delete is blocked (or, with
+    cascade, those plants are unlinked). The strain the event named is kept.
+    """
+    event = db.get(models.SeedProductionEvent, event_id)
+    if not event:
+        raise HTTPException(404, "Seed-production event not found")
+    seeds = db.query(models.Seed).filter(models.Seed.produced_by_event_id == event_id).all()
+    plants = []
+    if seeds:
+        plants = db.query(models.Plant).filter(
+            models.Plant.seed_id.in_([s.id for s in seeds])
+        ).all()
+    if plants and not cascade:
+        batch_names = [
+            (s.strain.name if s.strain else "Seed batch")
+            + (f" ({s.quantity} {'seed' if s.quantity == 1 else 'seeds'})" if s.quantity else "")
+            for s in seeds
+        ]
+        _raise_blocked(
+            "Plants were grown from the seeds this cross produced.",
+            [
+                _blocker(batch_names, "seed batch", "seed batches", "delete"),
+                _blocker([p.label for p in plants], "plant", "plants", "unlink"),
+            ],
+        )
+    for seed in seeds:
+        _unlink_plants_from_seed(seed, [p for p in plants if p.seed_id == seed.id])
+    db.flush()
+    for seed in seeds:
+        db.delete(seed)
+    db.delete(event)
+    db.commit()
+    return {"ok": True, "id": event_id}
 
 
 # ============ Dashboard summary ============

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
+import DeleteButton from '../components/DeleteButton.jsx';
 
 export default function Strains() {
   const [strains, setStrains] = useState([]);
@@ -42,6 +43,7 @@ export default function Strains() {
               </div>
               <div className="row-actions">
                 <button className="small-btn" onClick={() => setEditStrain(s)}>Edit</button>
+                <DeleteButton path={`/api/strains/${s.id}`} label={s.name} onDeleted={load} />
                 <Link to={`/strains/${s.id}`} className="muted small">view →</Link>
               </div>
             </div>
