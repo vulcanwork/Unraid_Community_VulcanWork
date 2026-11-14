@@ -26,7 +26,19 @@ os.makedirs(PHOTOS_DIR, exist_ok=True)
 Base.metadata.create_all(bind=engine)
 run_lightweight_migrations()
 
-app = FastAPI(title="SeedBreed", version="0.3.0")
+# Bump this on release. It is the one version the running app reports, via
+# /api/version and the sidebar; keep frontend/package.json in step with it.
+APP_VERSION = "0.3.0"
+
+# nginx only proxies /api/ to this app, so the docs have to live under it or
+# they answer 404 from the SPA's catch-all.
+app = FastAPI(
+    title="SeedBreed",
+    version=APP_VERSION,
+    openapi_url="/api/openapi.json",
+    docs_url="/api/docs",
+    redoc_url=None,
+)
 
 # CORS — permissive because the app sits behind your Cloudflare Tunnel
 app.add_middleware(
@@ -39,6 +51,12 @@ app.add_middleware(
 
 # Serve uploaded photos directly
 app.mount("/photos", StaticFiles(directory=PHOTOS_DIR), name="photos")
+
+
+@app.get("/api/version")
+def get_version():
+    """What build is running. Open to guests — the sidebar shows it."""
+    return {"version": APP_VERSION}
 
 
 # ============ Auth ============

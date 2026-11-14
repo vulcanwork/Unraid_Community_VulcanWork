@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
+import { api } from './api.js';
 import Dashboard from './pages/Dashboard.jsx';
 import Grows from './pages/Grows.jsx';
 import GrowDetail from './pages/GrowDetail.jsx';
@@ -11,6 +13,12 @@ import InfusionCalculator from './pages/InfusionCalculator.jsx';
 
 export default function App() {
   const { isAuthed, username, openLogin, logout } = useAuth();
+  const [version, setVersion] = useState(null);
+
+  // Which build is running. Cosmetic, so a failure just leaves it hidden.
+  useEffect(() => {
+    api.get('/api/version').then((v) => setVersion(v.version)).catch(() => {});
+  }, []);
 
   return (
     <div className="app-layout">
@@ -53,7 +61,10 @@ export default function App() {
             alt="VulcanWork"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
-          <div className="sidebar-logo-note">Brought to you by VulcanWork</div>
+          <div className="sidebar-logo-note">
+            Brought to you by VulcanWork
+            {version && <> · v{version}</>}
+          </div>
         </div>
 
         <div className="sidebar-auth">
