@@ -24,15 +24,16 @@ export default function DeleteButton({ path, label, confirmText, onDeleted }) {
   };
 
   const deleteAll = async () => {
+    if (busy) return;
     setBusy(true);
     try {
       await api.del(`${path}?cascade=true`);
       setBlocked(null);
+      // Stay disabled on success: the row goes away once onDeleted reloads.
       onDeleted();
     } catch (e) {
-      alert(e.message);
-    } finally {
       setBusy(false);
+      alert(e.message);
     }
   };
 
