@@ -21,6 +21,8 @@ and pollen. This closes the gap for the three objects that have a UI and don't.
   failing with a database error or silently orphaning data.
 - Offer a one-click way through that block when the user means it.
 - A fresh install's example data can be cleared entirely through the UI.
+- No delete anywhere in the app can leave a record pointing at something that
+  no longer exists.
 
 ## Non-goals
 
@@ -28,8 +30,9 @@ and pollen. This closes the gap for the three objects that have a UI and don't.
   (harvest records are unused — plants carry a free-text `quantity_harvested`
   instead; groups are fixed when a grow is created). Giving them delete buttons
   means first giving them a UI. Explicitly out of scope, confirmed with the user.
-- Changing the existing deletes. Grows, plants and pollen keep the exact
-  behaviour they have today, including their current block messages.
+- Reworking the existing deletes. Grow and plant delete each gain **one new
+  guard** (below) and nothing else; pollen delete is untouched. No existing
+  cascade behaviour, block message or route shape changes.
 - Undo, soft-delete, or a trash can.
 - A dedicated "reset example data" button. The three deletes plus the existing
   grow delete already clear a fresh install in three steps.
@@ -82,6 +85,9 @@ and it would let someone wipe breeding history from the grow page. It is also
 unnecessary: every existing block is caused by something being a parent in a
 breeding event, and breeding events become deletable in this work, so there is
 now a path through all of them.
+
+The new pollen guard below follows the same reasoning and gets no escape hatch
+either: the user clears the forward records by hand, in order.
 
 ## How it works
 
@@ -156,6 +162,37 @@ Two deliberate omissions:
 - `SeedProductionEvent.new_strain_name` is free text, not a foreign key, so it
   never blocks a strain delete. A strain whose name appears there deletes
   normally.
+
+### Closing the last orphan: pollen points at a plant nothing protects
+
+Every foreign key in `models.py` was audited against every delete path. All
+are covered — check-ins are detached from a deleted plant, harvests and photos
+go with it, groups and fertilizer events go with the grow, breeding events
+block on their parent plant and their pollen — with one exception:
+`PollenCollection.source_plant_id`. Deleting a plant (or the grow containing
+it) leaves pollen rows pointing at nothing, which the Pollen library then
+renders as "Plant #N" via the fallbacks in `_pollen_to_out` / `_pollen_label`.
+
+This was previously ruled "leave as-is" (2026-09-13); the user has since
+reversed that and asked for it closed. The rule they gave: **if anything
+forward of a record uses it, the record can't be deleted — clear the forward
+records by hand first.**
+
+So two existing routes each gain one guard, in the style of the guards already
+there, returning the same 400-with-a-sentence they already use:
+
+- `delete_plant` — blocked if any `PollenCollection.source_plant_id` is this
+  plant.
+- `delete_grow` — blocked if any plant in the grow has pollen collected from
+  it, checked alongside the breeding-parent guard already in that route.
+
+No escape hatch, and no dead end, because the chain unwinds in order and every
+link is a button that exists once this work lands:
+
+```
+  breeding event  →  pollen record  →  plant  →  grow
+     (new)            (exists)        (exists)  (exists)
+```
 
 ### API
 
@@ -243,19 +280,17 @@ page means handling the navigate-away, and the list page already covers it.
 
 `req()` currently turns every failure into
 `new Error("<status> <statusText>: <body text>")`. It needs to parse a JSON
-error body and, when `detail` is an object, hang it off the error as
-`err.detail` so the component can read `blocked_by`. `err.message` keeps its
-current readable form and `err.status` is already set, so every existing
-`alert(e.message)` caller is unaffected.
+error body and:
 
-## Known gap, deliberately left open
+- when `detail` is an object, hang it off the error as `err.detail` so the
+  component can read `blocked_by`;
+- when `detail` is a plain string, use it as `err.message`.
 
-Deleting a grow or a plant still leaves any pollen collected from that plant
-pointing at a vanished plant; the Pollen library then renders it as
-"Plant #N". This was raised and ruled on by the user on 2026-09-13 — leave
-as-is — and that ruling stands. Making breeding events deletable makes the
-situation marginally easier to reach (an event that was blocking a grow delete
-can now be cleared first), but it is the same gap, not a new one.
+The second half is a free fix for the existing blocks. Today every one of them
+reaches the user as `alert()` showing
+`400 Bad Request: {"detail":"Can't delete this plant: ..."}`; after this they
+read as the sentence the backend wrote. `err.status` is already set and no
+caller inspects `err.message`'s shape, so nothing else changes.
 
 ## Testing
 
@@ -282,6 +317,13 @@ The cases that actually matter, because they are where this breaks:
   batch; the auto-created strain survives.
 - **Cross with planted seeds.** Plain delete 409s; cascade removes the batch,
   leaves the plant with the batch's strain inherited, and leaves the strain.
+- **Pollen guard.** Deleting a plant that pollen was collected from is
+  refused; so is deleting the grow that plant lives in. Deleting the pollen
+  first lets both succeed. A plant with no pollen still deletes as it does
+  today — the existing plant and grow delete tests must keep passing
+  unchanged, which is the real check that the guard didn't overreach.
+- **The chain unwinds.** One end-to-end test: cross → pollen → plant → grow,
+  deleted in that order, each step succeeding only after the one before it.
 
 Frontend is verified by review plus `docker compose up --build` and a
 click-through: delete an unused strain, hit the block on a used one, then
