@@ -331,7 +331,12 @@ def test_plants_and_grows_without_pollen_still_delete(client):
 
 
 def test_the_whole_chain_unwinds_in_order(client):
-    """cross -> pollen -> plant -> grow, each step blocked until the one before."""
+    """Unwind cross -> pollen -> plant -> grow in order.
+
+    First the cross blocks all three deletes. Then, with the cross gone but the
+    pollen still there, the pollen guards on plant and grow are the only thing
+    stopping those two deletes. Only then does the rest unwind.
+    """
     grow = client.post("/api/grows", json={
         "name": "Chain Grow", "groups": [{"name": "G1"}],
     }).json()
@@ -349,6 +354,11 @@ def test_the_whole_chain_unwinds_in_order(client):
     assert client.delete(f"/api/pollen/{po['id']}").status_code == 400
 
     assert client.delete(f"/api/seed-production/{ev['id']}").status_code == 200
+
+    # Cross gone, pollen still present: only the new pollen guards can fire here.
+    assert client.delete(f"/api/plants/{dad['id']}").status_code == 400
+    assert client.delete(f"/api/grows/{grow['id']}").status_code == 400
+
     assert client.delete(f"/api/pollen/{po['id']}").status_code == 200
     assert client.delete(f"/api/plants/{dad['id']}").status_code == 200
     assert client.delete(f"/api/grows/{grow['id']}").status_code == 200
