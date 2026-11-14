@@ -105,6 +105,15 @@ export default function InfusionCalculator() {
         saved for next time.
       </p>
 
+      <div className="notice mt-4" style={{ maxWidth: 640 }}>
+        <strong>These numbers are estimates.</strong> Actual strength depends on your decarb,
+        time, temperature and straining — and on how accurate the THC/CBD percentages you
+        entered are, which for homegrown flower is usually a guess. Treat the result as a
+        ballpark that can be wrong in either direction. Start with a small portion, wait at
+        least two hours before taking more, and label anything you make and keep it away from
+        children and pets.
+      </div>
+
       <div className="grid grid-2 mt-6">
         <div className="card">
           <div className="card-title">Inputs</div>

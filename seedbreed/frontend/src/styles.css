@@ -244,6 +244,19 @@ h3 { font-size: 1.15rem; font-weight: 600; font-variation-settings: "opsz" 30; }
   color: var(--moss-900);
 }
 
+/* A standing advisory on a page: always visible, never dismissible. */
+.notice {
+  background: var(--bone);
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--copper);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.notice strong { color: var(--ink); }
+
 .grid    { display: grid; gap: 16px; }
 .grid-2  { grid-template-columns: repeat(2, 1fr); }
 .grid-3  { grid-template-columns: repeat(3, 1fr); }
