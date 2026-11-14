@@ -52,7 +52,7 @@ export default function Seeds() {
                 <button className="small-btn" onClick={() => setEditSeed(s)}>Edit</button>
                 <DeleteButton
                   path={`/api/seeds/${s.id}`}
-                  label={s.strain_name || `Strain #${s.strain_id}`}
+                  label={`${s.strain_name || `Strain #${s.strain_id}`} seed batch`}
                   onDeleted={load}
                 />
                 <Link to={`/strains/${s.strain_id}`} className="muted small">view strain →</Link>
