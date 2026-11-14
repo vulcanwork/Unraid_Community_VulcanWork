@@ -26,7 +26,7 @@ os.makedirs(PHOTOS_DIR, exist_ok=True)
 Base.metadata.create_all(bind=engine)
 run_lightweight_migrations()
 
-app = FastAPI(title="SeedBreed", version="0.1.0")
+app = FastAPI(title="SeedBreed", version="0.3.0")
 
 # CORS — permissive because the app sits behind your Cloudflare Tunnel
 app.add_middleware(
