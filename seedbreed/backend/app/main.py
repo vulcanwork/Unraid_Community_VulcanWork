@@ -28,7 +28,7 @@ run_lightweight_migrations()
 
 # Bump this on release. It is the one version the running app reports, via
 # /api/version and the sidebar; keep frontend/package.json in step with it.
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.4.0"
 
 # nginx only proxies /api/ to this app, so the docs have to live under it or
 # they answer 404 from the SPA's catch-all.
