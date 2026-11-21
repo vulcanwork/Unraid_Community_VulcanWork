@@ -10,6 +10,7 @@ import StrainDetail from './pages/StrainDetail.jsx';
 import Seeds from './pages/Seeds.jsx';
 import Breeding from './pages/Breeding.jsx';
 import InfusionCalculator from './pages/InfusionCalculator.jsx';
+import GrowSchedule from './pages/GrowSchedule.jsx';
 
 export default function App() {
   const { isAuthed, username, openLogin, logout } = useAuth();
@@ -49,6 +50,9 @@ export default function App() {
           </NavLink>
 
           <div className="nav-section">Utilities</div>
+          <NavLink to="/grow-schedule">
+            <span className="nav-icon">☀</span> Grow Schedule
+          </NavLink>
           <NavLink to="/infusion-calculator">
             <span className="nav-icon">⚗</span> Infusion Calculator
           </NavLink>
@@ -94,6 +98,7 @@ export default function App() {
           <Route path="/seeds" element={<Seeds />} />
           <Route path="/breeding" element={<Breeding />} />
           <Route path="/infusion-calculator" element={<InfusionCalculator />} />
+          <Route path="/grow-schedule" element={<GrowSchedule />} />
         </Routes>
       </main>
     </div>
