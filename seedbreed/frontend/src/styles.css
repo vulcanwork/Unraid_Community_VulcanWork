@@ -620,3 +620,78 @@ textarea { resize: vertical; min-height: 90px; font-family: var(--font-body); }
 .mb-2 { margin-bottom: 8px; }
 .muted { color: var(--ink-muted); }
 .small { font-size: 13px; }
+
+/* ===== Grow schedule ===== */
+
+.schedule-date-input {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  padding: 6px 8px;
+}
+.schedule-milestone { font-size: 1.35rem; line-height: 1.25; }
+
+.schedule-wrap {
+  overflow-x: auto;
+  background: var(--paper);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.schedule-table th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--ink-muted);
+  background: var(--bone);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: bottom;
+}
+.schedule-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+.schedule-table tr:last-child td { border-bottom: none; }
+.schedule-table tbody tr:hover td { background: rgba(216, 226, 205, 0.35); }
+.schedule-table tr.current td { background: var(--moss-100); }
+.schedule-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.schedule-table .nowrap { white-space: nowrap; }
+.schedule-notes { min-width: 260px; color: var(--ink-soft); }
+.schedule-now {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--moss-700);
+  color: var(--bone);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.phase-pill {
+  display: inline-block;
+  min-width: 128px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.phase-pill.seedling  { background: #7fd6b0; color: #134a35; }
+.phase-pill.early-veg { background: #a6dc8f; color: #24501a; }
+.phase-pill.late-veg  { background: #5fbf55; color: #133d10; }
+.phase-pill.stretch   { background: #f2b09a; color: #6b2a14; }
+.phase-pill.flower    { background: #c7bdf0; color: #3b2d78; }
+.phase-pill.harvest   { background: #f4a7ac; color: #6e1f26; }
